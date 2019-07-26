@@ -1,11 +1,12 @@
 // Global variables
-OPOSSUM="/home/sbsuser/programs/Opossum/"
-PLATYPUS="/root/miniconda3/share/platypus-variant-0.8.1.1-3/"
-GENOME="/illumina/pipeline_in/GENOMES/Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta/genome.fa"
-SNPEFF="/home/sbsuser/programs/snpEff/"
-EXONBED="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/exon_coordinates/exons.bed"
-EXAC="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/annotation_datasets/ExAC.r1.sites.vep.vcf"
-COSMIC="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/annotation_datasets/CosmicCodingMust.vcf.gz"
+// Modify paths to executables and input files
+OPOSSUM="path/to/Opossum/"
+PLATYPUS="path/to/Platypus"
+GENOME="path/to/genome.fa"
+SNPEFF="path/to/snpEff"
+EXONBED="path/to/exons.bed"
+EXAC="path/to/ExAC.r1.sites.vep.vcf"
+COSMIC="path/to/CosmicCodingMust.vcf.gz"
 
 @transform("opossum.bam")
 opossum = {
