@@ -1,0 +1,101 @@
+// Global variables
+OPOSSUM="/home/sbsuser/programs/Opossum/"
+PLATYPUS="/root/miniconda3/share/platypus-variant-0.8.1.1-3/"
+GENOME="/illumina/pipeline_in/GENOMES/Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta/genome.fa"
+SNPEFF="/home/sbsuser/programs/snpEff/"
+EXONBED="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/exon_coordinates/exons.bed"
+EXAC="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/annotation_datasets/ExAC.r1.sites.vep.vcf"
+COSMIC="/illumina/pipeline_in/dev_pipe/RNASEQ_SNP/annotation_datasets/CosmicCodingMust.vcf.gz"
+
+@transform("opossum.bam")
+opossum = {
+            doc title: "Prepare RNA sequencing reads for variant calling using Opossum",
+            desc:  """Conducts a number of preparatory and quality filtering steps
+                      to make RNA sequencing alignments suitable for variant calling using
+                      GATK haplotype caller or Platypus. The input for this step were
+                      bam files generated previously using HISAT2 and used in RNA-sequencing
+                      analysis of Lars lung cancer project.
+                   """
+            exec """
+                     python $OPOSSUM/Opossum.py 
+                         --BamFile $input 
+                         --OutFile $output.opossum.bam 
+                         --SoftClipsExist True 
+                         --ProperlyPaired False 
+                         --MapCutoff 60
+                 """
+}  
+
+@transform("vcf")
+platypus = {
+           doc title: "Call variants using Platypus",
+           desc:  """Calls variants with Platypus using Opossum processed files as inputs.
+                  """
+           exec """ 
+                    python $PLATYPUS/Platypus.py callVariants  
+                         --bamFiles $input  
+                         --refFile $GENOME 
+                         --filterDuplicates 0 
+                         --minFlank 0 
+                         --maxReadLength 75  
+                         --minGoodQualBases 10  
+                         --minBaseQual 20 
+                         -o $output.vcf
+                 """
+}
+
+// Retain only the variants that pass quality filter and are within the exon regions of GRCh37 (Ensembl)
+pass =     {
+           doc title: "Variant quality and coordinate filtering",
+           desc:  """Only the variants with FILTER value 'PASS' located within exonic regions 
+                     are retained. The genome build was Ensembl GRCh37.
+                  """
+
+            exec """ 
+                    cat $input.opossum.vcf | java -jar $SNPEFF/SnpSift.jar intervals $EXONBED | 
+                    java -jar $SNPEFF/SnpSift.jar filter "( FILTER == 'PASS')" > $output.exons.vcf                            
+                 """
+                 
+}
+  
+// Annotate by gene and predict effect using snpEff
+ann =   {
+           doc title: "Annotate variants with snpEff",
+           desc:  """The impact of the variants on gene function is predicted using snpEff software.
+                  """
+
+           exec """
+                    java -Xmx10g -jar $SNPEFF/snpEff.jar GRCh37.75 $input.exons.vcf > $output.vcf
+                """
+}
+
+
+// Annotate with ExAC
+@filter("exac") 
+exac = {
+         doc title: "Annotate variants with ids from ExAc database",
+         desc:  """Ids of known SNPs from ExAc database were added to the ID field.
+                   Exac release 1 variants ftp://ftp.broadinstitute.org/pub/ExAC_release/release1/ExAC.r1.sites.vep.vcf.gz
+                """
+        exec """ 
+                  java -jar $SNPEFF/SnpSift.jar annotate -id $EXAC
+                        $input > $output
+             """
+}
+
+// Annotate with Cosmic
+@filter("cosmic")
+cosmic = {
+          doc title: "Annotate variants with ids from COSMIC database",
+          desc:  """Ids of known somatic cancer mutations from COSMIC database were added to the ID field.
+                    COSMIC somatic mutations dataset: version 89, genome GRCh37, 
+                    CosmicCodingMust.vcf.gz (this file had to go through bgzip and indexing with tabix)
+                 """
+
+          exec """
+                   java -jar $SNPEFF/SnpSift.jar annotate -id $COSMIC
+                               $input > $output
+               """
+}
+
+Bpipe.run {"%.bam" * [opossum + platypus + pass + ann + exac + cosmic]}
